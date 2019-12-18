@@ -1,101 +1,148 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
-class NativeAudio {
-  static const _channel = const MethodChannel('com.danielgauci.native_audio');
+abstract class NativeAudio {
+  void play(
+    String url, {
+    @required String title,
+    String artist,
+    String album,
+    String imageUrl,
+  });
+  void resume();
+  void pause();
+  void stop();
+  void seekTo(Duration time);
+  void release();
+}
 
-  static const _nativeMethodPlay = "play";
-  static const _nativeMethodPlayArgUrl = "url";
-  static const _nativeMethodPlayArgTitle = "title";
-  static const _nativeMethodPlayArgArtist = "artist";
-  static const _nativeMethodPlayArgAlbum = "album";
-  static const _nativeMethodPlayArgImageUrl = "imageUrl";
-  static const _nativeMethodResume = "resume";
-  static const _nativeMethodPause = "pause";
-  static const _nativeMethodStop = "stop";
-  static const _nativeMethodSeekTo = "seekTo";
-  static const _nativeMethodSeekToArgTimeInMillis = "timeInMillis";
+class NativeAudioImpl implements NativeAudio {
+  static const _invokePlayMethodCall = "play";
+  static const _playMethodCallUrlArg = "url";
+  static const _playMethodCallTitleArg = "title";
+  static const _playMethodCallArtistArg = "artist";
+  static const _playMethodCallAlbumArg = "album";
+  static const _playMethodCallImageArg = "imageUrl";
+
+  static const _invokeResumeMethodCall = "resume";
+  static const _invokePauseMethodCall = "pause";
+  static const _invokeStopMethodCall = "stop";
+
+  static const _invokeSeekToMethodCall = "seekTo";
+  static const _seekToMethodCallTimeArg = "timeInMillis";
+
   static const _nativeMethodRelease = "release";
-  static const _flutterMethodOnLoaded = "onLoaded";
-  static const _flutterMethodOnResumed = "onResumed";
-  static const _flutterMethodOnPaused = "onPaused";
-  static const _flutterMethodOnStopped = "onStopped";
-  static const _flutterMethodOnProgressChanged = "onProgressChanged";
-  static const _flutterMethodOnCompleted = "onCompleted";
+  static const _methodCallOnLoaded = "onLoaded";
+  static const _methodCallOnResumed = "onResumed";
+  static const _methodCallOnPaused = "onPaused";
+  static const _methodCallOnStopped = "onStopped";
+  static const _methodCallOnProgressChanged = "onProgressChanged";
+  static const _methodCallOnCompleted = "onCompleted";
 
-  Function(Duration) onLoaded;
-  Function() onResumed;
-  Function() onPaused;
-  Function() onStopped;
-  Function onCompleted;
-  Function(Duration) onProgressChanged;
+  factory NativeAudioImpl() {
+    return _instance ??= NativeAudioImpl.private(
+      MethodChannel('com.danielgauci.native_audio'),
+    );
+  }
 
-  NativeAudio();
+  @visibleForTesting
+  NativeAudioImpl.private(this._channel);
 
-  void play(String url, {String title, String artist, String album, String imageUrl}) {
+  static NativeAudio _instance;
+
+  final MethodChannel _channel;
+
+  VoidCallback onResumed;
+  VoidCallback onPaused;
+  VoidCallback onStopped;
+  VoidCallback onCompleted;
+  void Function(Duration) onLoaded;
+  void Function(Duration) onProgressChanged;
+  void Function(Exception, StackTrace) onError;
+
+  @override
+  void play(
+    String url, {
+    @required String title,
+    String artist,
+    String album,
+    String imageUrl,
+  }) {
     _registerMethodCallHandler();
-    _invokeNativeMethod(
-      _nativeMethodPlay,
+    _invokeMethod(
+      _invokePlayMethodCall,
       arguments: <String, dynamic>{
-        _nativeMethodPlayArgUrl: url,
-        _nativeMethodPlayArgTitle: title,
-        _nativeMethodPlayArgArtist: artist,
-        _nativeMethodPlayArgAlbum: album,
-        _nativeMethodPlayArgImageUrl: imageUrl,
+        _playMethodCallUrlArg: url,
+        _playMethodCallAlbumArg: album,
+        _playMethodCallTitleArg: title,
+        _playMethodCallArtistArg: artist,
+        _playMethodCallImageArg: imageUrl,
       },
     );
   }
 
+  @override
   void resume() {
-    _invokeNativeMethod(_nativeMethodResume);
+    _invokeMethod(_invokeResumeMethodCall);
   }
 
+  @override
   void pause() {
-    _invokeNativeMethod(_nativeMethodPause);
+    _invokeMethod(_invokePauseMethodCall);
   }
 
+  @override
   void stop() {
-    _invokeNativeMethod(_nativeMethodStop);
+    _invokeMethod(_invokeStopMethodCall);
   }
 
+  @override
   void seekTo(Duration time) {
-    _invokeNativeMethod(
-      _nativeMethodSeekTo,
-      arguments: <String, dynamic>{_nativeMethodSeekToArgTimeInMillis: time.inMilliseconds},
+    _invokeMethod(
+      _invokeSeekToMethodCall,
+      arguments: <String, dynamic>{
+        _seekToMethodCallTimeArg: time.inMilliseconds
+      },
     );
   }
 
+  @override
   void release() {
-    _invokeNativeMethod(_nativeMethodRelease);
+    _invokeMethod(_nativeMethodRelease);
   }
 
   void _registerMethodCallHandler() {
     // Listen to method calls from native
     _channel.setMethodCallHandler((methodCall) {
       switch (methodCall.method) {
-        case _flutterMethodOnLoaded:
+        case _methodCallOnLoaded:
           int durationInMillis = methodCall.arguments;
-          if (onLoaded != null) onLoaded(Duration(milliseconds: durationInMillis));
+          if (onLoaded != null)
+            onLoaded(Duration(milliseconds: durationInMillis));
           break;
 
-        case _flutterMethodOnResumed:
+        case _methodCallOnResumed:
           if (onResumed != null) onResumed();
           break;
 
-        case _flutterMethodOnPaused:
+        case _methodCallOnPaused:
           if (onPaused != null) onPaused();
           break;
 
-        case _flutterMethodOnStopped:
+        case _methodCallOnStopped:
           if (onStopped != null) onStopped();
           break;
 
-        case _flutterMethodOnCompleted:
+        case _methodCallOnCompleted:
           if (onCompleted != null) onCompleted();
           break;
 
-        case _flutterMethodOnProgressChanged:
-          int currentTimeInMillis = methodCall.arguments;
-          if (onProgressChanged != null) onProgressChanged(Duration(milliseconds: currentTimeInMillis));
+        case _methodCallOnProgressChanged:
+
+          /// Current progress in milliseconds
+          final int progress = methodCall.arguments;
+          if (onProgressChanged != null && progress != null)
+            onProgressChanged(Duration(milliseconds: progress));
           break;
       }
 
@@ -103,11 +150,14 @@ class NativeAudio {
     });
   }
 
-  Future _invokeNativeMethod(String method, {Map<String, dynamic> arguments}) async {
+  Future<void> _invokeMethod<T>(
+    String method, {
+    Map<String, dynamic> arguments,
+  }) async {
     try {
       await _channel.invokeMethod(method, arguments);
-    } on PlatformException catch (e) {
-      print("Failed to call native method: " + e.message);
+    } catch (e, stack) {
+      onError(e, stack);
     }
   }
 }

@@ -16,7 +16,7 @@ void main() {
   });
 
   test('play', () async {
-    var audio = NativeAudio();
+    final audio = NativeAudioImpl();
     audio.play(
       "some-url",
       title: "some-title",
