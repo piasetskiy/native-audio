@@ -31,13 +31,13 @@ class NativeAudioImpl implements NativeAudio {
   static const _invokeSeekToMethodCall = "seekTo";
   static const _seekToMethodCallTimeArg = "timeInMillis";
 
+  static const _methodCallOnStop = "onStop";
+  static const _methodCallOnLoad = "onLoad";
+  static const _methodCallOnPause = "onPause";
+  static const _methodCallOnResume = "onResume";
   static const _nativeMethodRelease = "release";
-  static const _methodCallOnLoaded = "onLoaded";
-  static const _methodCallOnResumed = "onResumed";
-  static const _methodCallOnPaused = "onPaused";
-  static const _methodCallOnStopped = "onStopped";
-  static const _methodCallOnProgressChanged = "onProgressChanged";
-  static const _methodCallOnCompleted = "onCompleted";
+  static const _methodCallOnComplete = "onComplete";
+  static const _methodCallOnProgressChange = "onProgressChange";
 
   factory NativeAudioImpl() {
     return _instance ??= NativeAudioImpl.private(
@@ -52,12 +52,12 @@ class NativeAudioImpl implements NativeAudio {
 
   final MethodChannel _channel;
 
-  VoidCallback onResumed;
-  VoidCallback onPaused;
-  VoidCallback onStopped;
-  VoidCallback onCompleted;
-  void Function(Duration) onLoaded;
-  void Function(Duration) onProgressChanged;
+  VoidCallback didResume;
+  VoidCallback didPause;
+  VoidCallback didStop;
+  VoidCallback didComplete;
+  void Function(Duration) didLoad;
+  void Function(Duration) onProgressChange;
   void Function(Exception, StackTrace) onError;
 
   @override
@@ -115,34 +115,34 @@ class NativeAudioImpl implements NativeAudio {
     // Listen to method calls from native
     _channel.setMethodCallHandler((methodCall) {
       switch (methodCall.method) {
-        case _methodCallOnLoaded:
+        case _methodCallOnLoad:
           int durationInMillis = methodCall.arguments;
-          if (onLoaded != null)
-            onLoaded(Duration(milliseconds: durationInMillis));
+          if (didLoad != null)
+            didLoad(Duration(milliseconds: durationInMillis));
           break;
 
-        case _methodCallOnResumed:
-          if (onResumed != null) onResumed();
+        case _methodCallOnResume:
+          if (didResume != null) didResume();
           break;
 
-        case _methodCallOnPaused:
-          if (onPaused != null) onPaused();
+        case _methodCallOnPause:
+          if (didPause != null) didPause();
           break;
 
-        case _methodCallOnStopped:
-          if (onStopped != null) onStopped();
+        case _methodCallOnStop:
+          if (didStop != null) didStop();
           break;
 
-        case _methodCallOnCompleted:
-          if (onCompleted != null) onCompleted();
+        case _methodCallOnComplete:
+          if (didComplete != null) didComplete();
           break;
 
-        case _methodCallOnProgressChanged:
+        case _methodCallOnProgressChange:
 
           /// Current progress in milliseconds
           final int progress = methodCall.arguments;
-          if (onProgressChanged != null && progress != null)
-            onProgressChanged(Duration(milliseconds: progress));
+          if (onProgressChange != null && progress != null)
+            onProgressChange(Duration(milliseconds: progress));
           break;
       }
 

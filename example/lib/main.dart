@@ -62,7 +62,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _listenForAudioEvents() {
-    _audio.onLoaded = (audioDuration) {
+    _audio.didLoad = (audioDuration) {
       setState(() {
         _isLoaded = true;
         _isPlaying = true;
@@ -70,19 +70,19 @@ class _MyAppState extends State<MyApp> {
       });
     };
 
-    _audio.onResumed = () {
+    _audio.didResume = () {
       setState(() => _isPlaying = true);
       _status = "resumed";
     };
 
-    _audio.onPaused = () {
+    _audio.didPause = () {
       setState(() {
         _isPlaying = false;
         _status = "paused";
       });
     };
 
-    _audio.onStopped = () {
+    _audio.didStop = () {
       setState(() {
         _isLoaded = false;
         _isPlaying = false;
@@ -90,7 +90,7 @@ class _MyAppState extends State<MyApp> {
       });
     };
 
-    _audio.onCompleted = () {
+    _audio.didComplete = () {
       setState(() {
         _isLoaded = false;
         _isPlaying = false;

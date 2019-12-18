@@ -11,13 +11,13 @@ import AVFoundation
 import MediaPlayer
 
 protocol AudioPlayerDelegate: class {
-
-    // Progress in secconds
+    /// - Parameter progress: progress in secconds
     func audioPlayerDidChangeProgress(_ progress: Int)
+    /// - Parameter duration: duration in secconds
     func audioPlayerDidLoad(duration: Int)
-    func audioPlayerDidStoped()
-    func audioPlayerDidPaused()
-    func audioPlayerDidResumed()
+    func audioPlayerDidStop()
+    func audioPlayerDidPause()
+    func audioPlayerDidResume()
     func audioPlayerDidComplete()
 }
 
@@ -41,10 +41,14 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
     private var player: AVPlayer!
     private var playerItem: AVPlayerItem!
     private var playerItemContext = 0
-    private var currentProgressInMillis = -1
-    private var totalDurationInMillis = -1
-    private var skipForwardTimeInMillis = 15_000
-    private var skipBackwardTimeInMillis = 15_000
+    /// current  progress  in milliseconds
+    private var currentProgress = -1
+    /// total  duration  in milliseconds
+    private var totalDuration = -1
+    /// seek forward time in milliseconds
+    private let seekForwardTime = 15_000
+    /// seek backward time in milliseconds
+    private let seekBackwardTime = 15_000
     
     private var playingInfoCenter: MPNowPlayingInfoCenter {
         return MPNowPlayingInfoCenter.default()
@@ -93,8 +97,8 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
             guard playerItem.duration.isNumeric else { return }
             
             let durationInSeconds = CMTimeGetSeconds(playerItem.duration)
-            totalDurationInMillis = Int(1000 * durationInSeconds)
-            delegate?.audioPlayerDidLoad(duration: totalDurationInMillis)
+            totalDuration = Int(1000 * durationInSeconds)
+            delegate?.audioPlayerDidLoad(duration: totalDuration)
             
             // Update control center
             playingInfoCenter.nowPlayingInfo?[MPMediaItemPropertyPlaybackDuration] = CMTimeGetSeconds(playerItem.duration)
@@ -111,14 +115,14 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         guard let audioUrl = URL(string: url) else { return }
         playerItem = .init(url: audioUrl)
         
+        // Setup player
+        player = .init(playerItem: playerItem)
+        
         // Update control center
         updateNowPlayingInfoCenter(title: title, artist: artist, album: album, imageUrl: imageUrl)
         
         // Observe player item status
         playerItem.addObserver(self, forKeyPath: #keyPath(AVPlayerItem.status), options: [.old, .new], context: &playerItemContext)
-        
-        // Setup player
-        player = .init(playerItem: playerItem)
         
         // Skips initial buffering
         player.automaticallyWaitsToMinimizeStalling = false
@@ -129,33 +133,33 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         notificationCenter.addObserver(
             self,
             selector: #selector(playerDidFinishPlaying(notification:)),
-            name: NSNotification.Name.AVPlayerItemDidPlayToEndTime,
+            name: .AVPlayerItemDidPlayToEndTime,
             object: playerItem
         )
         
         // Set audio session as active to play in background
         
-        try? audioSession.setCategory(AVAudioSession.Category.playback)
+        try? audioSession.setCategory(.playback)
         try? audioSession.setActive(true)
         
         // Observe progress
         let interval = CMTime(seconds: 1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        let mainQueue = DispatchQueue.main
-        player.addPeriodicTimeObserver(forInterval: interval, queue: mainQueue) { [weak self] time in
+        player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let currentSeconds = CMTimeGetSeconds(time)
             let currentMillis = 1000 * currentSeconds
             
-            self?.progressChanged(timeInMillis: Int(currentMillis))
+            self?.progressChanged(time: Int(currentMillis))
         }
     }
     
     func resume() {
         player.play()
         if player.currentItem != nil {
-            playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = CMTimeGetSeconds(player.currentTime())
+            let currentTime = CMTimeGetSeconds(player.currentTime())
+            playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
             playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] = 1
         }
-        delegate?.audioPlayerDidResumed()
+        delegate?.audioPlayerDidResume()
     }
     
     func pause() {
@@ -165,7 +169,7 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
             playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
             playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] = 0
         }
-        delegate?.audioPlayerDidPaused()
+        delegate?.audioPlayerDidPause()
     }
     
     func stop() {
@@ -174,7 +178,6 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         
         playingInfoCenter.nowPlayingInfo = nil
         
-        // Set audio session as active to play in background
         do {
             try audioSession.setActive(false)
         } catch {
@@ -183,22 +186,22 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         
         notificationCenter.removeObserver(
             self,
-            name: NSNotification.Name.AVPlayerItemDidPlayToEndTime,
+            name: .AVPlayerItemDidPlayToEndTime,
             object: playerItem
         )        
         
-        delegate?.audioPlayerDidStoped()
+        delegate?.audioPlayerDidStop()
     }
     
     func seekTo(time: Int) {
-           let seekTo = CMTimeMakeWithSeconds(Float64(time / 1000), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-           player.seek(to: seekTo)
-           guard player.currentItem != nil else {
-               return
-           }
-           
-           playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Float64(time / 1000)
-       }
+        let seekTo = CMTimeMakeWithSeconds(Float64(time / 1000), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        player.seek(to: seekTo)
+        guard player.currentItem != nil else {
+            return
+        }
+        
+        playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Float64(time / 1000)
+    }
     
     func setupRemoteTransportControls() {
         // Get the shared MPRemoteCommandCenter
@@ -220,19 +223,18 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
             return .success
         }
         
-        // Add skip forward/backward track
-        commandCenter.skipForwardCommand.addTarget { [weak self] event in
+        // Add seek forward/backward track
+        commandCenter.seekForwardCommand.addTarget { [weak self] event in
             guard let self = self else { return .commandFailed }
             
-            return self.skipForward() ? .success : .commandFailed
+            return self.seekForward() ? .success : .commandFailed
         }
         
-        commandCenter.skipBackwardCommand.addTarget { [weak self] event in
+        commandCenter.seekForwardCommand.addTarget { [weak self] event in
             guard let self = self else { return .commandFailed }
             
-            return self.skipBackward() ? .success : .commandFailed
+            return self.seekBackward() ? .success : .commandFailed
         }
-        
         
         commandCenter.changePlaybackPositionCommand.isEnabled = true
         commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
@@ -249,24 +251,24 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
 
 @available(iOS 10.0, *)
 private extension AudioPlayerImpl {
-    func skipForward() -> Bool {
-        if (totalDurationInMillis > currentProgressInMillis + skipForwardTimeInMillis) {
-            // Episode is loaded and there is enough time to skip forward
-            seekTo(time: currentProgressInMillis + skipForwardTimeInMillis)
+    func seekForward() -> Bool {
+        if (totalDuration > currentProgress + seekForwardTime) {
+            // Episode is loaded and there is enough time to seek forward
+            seekTo(time: currentProgress + seekForwardTime)
             return true
         } else {
-            debugPrint("Unable to skip forward, episode is not loaded or there is not enough time to skip forward")
+            debugPrint("Unable to seek forward, episode is not loaded or there is not enough time to seek forward")
             return false
         }
     }
     
-    func skipBackward() -> Bool {
-        if (currentProgressInMillis - skipBackwardTimeInMillis > 0) {
-            // Episode is loaded and there is enough time to skip backward
-            seekTo(time: currentProgressInMillis - skipBackwardTimeInMillis)
+    func seekBackward() -> Bool {
+        if (currentProgress - seekBackwardTime > 0) {
+            // Episode is loaded and there is enough time to seek backward
+            seekTo(time: currentProgress - seekBackwardTime)
             return true
         } else {
-            debugPrint("Unable to skip backward, episode is not loaded or there is not enough time to skip backward")
+            debugPrint("Unable to seek backward, episode is not loaded or there is not enough time to seek backward")
             return false
         }
     }
@@ -293,9 +295,10 @@ private extension AudioPlayerImpl {
         playingInfoCenter.nowPlayingInfo?[MPMediaItemPropertyArtwork] = itemArtwork
     }
     
-    func progressChanged(timeInMillis: Int) {
-        currentProgressInMillis = timeInMillis
-        delegate?.audioPlayerDidChangeProgress(timeInMillis)
+    /// - Parameter time: progerss in milliseconds
+    func progressChanged(time: Int) {
+        currentProgress = time
+        delegate?.audioPlayerDidChangeProgress(time)
     }
     
     @objc func playerDidFinishPlaying(notification: Notification) {

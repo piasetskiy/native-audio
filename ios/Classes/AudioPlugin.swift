@@ -2,42 +2,37 @@ import Flutter
 import UIKit
 import AVFoundation
 import MediaPlayer
-import os
 
 public class AudioPlugin: NSObject, FlutterPlugin {
     
     enum SupportedInvokeCall: String {
-        case onLoadedCall = "onLoaded"
-        case onPausedCall = "onPaused"
-        case onResumedCall = "onResumed"
-        case onStoppedCall = "onStopped"
-        case onCompletedCall = "onCompleted"
-        case onProgressChangedCall = "onProgressChanged"
+        case onLoad = "onLoaded"
+        case onPause = "onPause"
+        case onResume = "onResume"
+        case onStop = "onStop"
+        case onComplete = "onComplete"
+        case onProgressChange = "onProgressChange"
     }
     
     private enum SupportedCall: String {
-        case playCall = "play"
-        case resumeCall = "resume"
-        case pauseCall = "pause"
-        case stopCall = "stop"
-        case seekToCall = "seekTo"
+        case play = "play"
+        case resume = "resume"
+        case pause = "pause"
+        case stop = "stop"
+        case seekTo = "seekTo"
         
-        init?(method: String) {
+        init?(method: String?) {
             switch method {
-            case SupportedCall.playCall.rawValue:
-                self = .playCall
-            case SupportedCall.resumeCall.rawValue:
-                self = .resumeCall
-                
-            case SupportedCall.pauseCall.rawValue:
-                self = .pauseCall
-                
-            case SupportedCall.stopCall.rawValue:
-                self = .stopCall
-                
-            case SupportedCall.seekToCall.rawValue:
-                self = .seekToCall
-                
+            case SupportedCall.play.rawValue:
+                self = .play
+            case SupportedCall.resume.rawValue:
+                self = .resume
+            case SupportedCall.pause.rawValue:
+                self = .pause
+            case SupportedCall.stop.rawValue:
+                self = .stop
+            case SupportedCall.seekTo.rawValue:
+                self = .seekTo
             default:
                 return nil
             }
@@ -51,7 +46,7 @@ public class AudioPlugin: NSObject, FlutterPlugin {
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel: FlutterMethodChannel = .init(name: channelName, binaryMessenger: registrar.messenger())
-        let instance = AudioPlugin(withChannel: channel)
+        let instance: AudioPlugin = .init(withChannel: channel)
         
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
@@ -62,8 +57,6 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         if #available(iOS 10.0, *) {
             player = instance()
             player.delegate = self
-        } else {
-            // Fallback on earlier versions
         }
     }
     
@@ -74,32 +67,35 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         }
         
         switch (method) {
-        case .playCall:
+        case .play:
             guard let arguments = call.arguments as? NSDictionary,
                 let url =  arguments["url"] as? String,
                 let title = arguments["title"] as? String else {
                     return
             }
+            player.play(
+                url: url,
+                title: title,
+                artist: arguments["artist"] as? String,
+                album: arguments["album"] as? String,
+                imageUrl: arguments["imageUrl"] as? String
+            )
             
-            let artist =  arguments["artist"] as? String
-            let album =  arguments["album"] as? String
-            let imageUrl =  arguments["imageUrl"] as? String
-            
-            player.play(url: url, title: title, artist: artist, album: album, imageUrl: imageUrl)
-            
-        case .resumeCall:
+        case .resume:
             player.resume()
             
-        case .pauseCall:
+        case .pause:
             player.pause()
             
-        case .stopCall:
+        case .stop:
             player.stop()
             
-        case .seekToCall:
-            let arguments = call.arguments as! NSDictionary
-            let timeInMillis =  arguments["timeInMillis"] as! Int
-            player.seekTo(time: timeInMillis)
+        case .seekTo:
+            guard let arguments = call.arguments as? NSDictionary,
+                let time = arguments["timeInMillis"] as? Int else {
+                    return
+            }
+            player.seekTo(time: time)
         }
     }
     
@@ -109,34 +105,36 @@ public class AudioPlugin: NSObject, FlutterPlugin {
     }
 }
 
+// MARK: AudioPlayerDelegate
+
 extension AudioPlugin: AudioPlayerDelegate {
     
     func audioPlayerDidChangeProgress(_ progress: Int) {
-        methodChannel.invokeMethod(method: .onProgressChangedCall, arguments: progress)
+        methodChannel.invokeMethod(method: .onProgressChange, arguments: progress)
     }
     
     func audioPlayerDidLoad(duration: Int) {
-        methodChannel.invokeMethod(method: .onLoadedCall, arguments: duration)
+        methodChannel.invokeMethod(method: .onLoad, arguments: duration)
     }
     
-    func audioPlayerDidStoped() {
-     methodChannel.invokeMethod(method: .onStoppedCall)
+    func audioPlayerDidStop() {
+        methodChannel.invokeMethod(method: .onStop)
     }
     
-    func audioPlayerDidPaused() {
-       methodChannel.invokeMethod(method: .onPausedCall)
+    func audioPlayerDidPause() {
+        methodChannel.invokeMethod(method: .onPause)
     }
     
-    func audioPlayerDidResumed() {
-       methodChannel.invokeMethod(method: .onResumedCall)
+    func audioPlayerDidResume() {
+        methodChannel.invokeMethod(method: .onResume)
     }
     
     func audioPlayerDidComplete() {
-        methodChannel.invokeMethod(method: .onCompletedCall)
+        methodChannel.invokeMethod(method: .onComplete)
     }
 }
 
-extension FlutterMethodChannel {
+fileprivate extension FlutterMethodChannel {
     func invokeMethod(method: AudioPlugin.SupportedInvokeCall, arguments: Any? = nil) {
         invokeMethod(method.rawValue, arguments: arguments)
     }
