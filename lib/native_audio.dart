@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:quiver/strings.dart';
 
 abstract class NativeAudio {
   VoidCallback didResume;
@@ -7,8 +10,8 @@ abstract class NativeAudio {
   VoidCallback didStop;
   VoidCallback didComplete;
   void Function(Duration) didLoad;
+  void Function(Exception) onError;
   void Function(Duration) didChangeProgress;
-  void Function(Exception, StackTrace) onError;
 
   factory NativeAudio.build() => _NativeAudioImpl();
 
@@ -34,18 +37,19 @@ class _NativeAudioImpl implements NativeAudio {
   static const _playMethodCallAlbumArg = "album";
   static const _playMethodCallImageArg = "imageUrl";
 
+  static const _invokeReleaseMethodCall = "release";
   static const _invokeResumeMethodCall = "resume";
   static const _invokePauseMethodCall = "pause";
+
   static const _invokeStopMethodCall = "stop";
-
   static const _invokeSeekToMethodCall = "seekTo";
-  static const _seekToMethodCallTimeArg = "timeInMillis";
 
+  static const _seekToMethodCallTimeArg = "timeInMillis";
+  static const _methodCallOnError = "onError";
   static const _methodCallOnStop = "onStop";
   static const _methodCallOnLoad = "onLoad";
   static const _methodCallOnPause = "onPause";
   static const _methodCallOnResume = "onResume";
-  static const _nativeMethodRelease = "release";
   static const _methodCallOnComplete = "onComplete";
   static const _methodCallOnProgressChange = "onProgressChange";
 
@@ -67,8 +71,8 @@ class _NativeAudioImpl implements NativeAudio {
   VoidCallback didStop;
   VoidCallback didComplete;
   void Function(Duration) didLoad;
+  void Function(Exception) onError;
   void Function(Duration) didChangeProgress;
-  void Function(Exception, StackTrace) onError;
 
   @override
   void play(
@@ -118,7 +122,7 @@ class _NativeAudioImpl implements NativeAudio {
 
   @override
   void release() {
-    _invokeMethod(_nativeMethodRelease);
+    if (Platform.isAndroid) _invokeMethod(_invokeReleaseMethodCall);
   }
 
   void _registerMethodCallHandler() {
@@ -154,6 +158,11 @@ class _NativeAudioImpl implements NativeAudio {
           if (didChangeProgress != null && progress != null)
             didChangeProgress(Duration(milliseconds: progress));
           break;
+
+        case _methodCallOnError:
+          final String error = methodCall.arguments;
+          if (onError != null && !isBlank(error)) onError(Exception(error));
+          break;
       }
 
       return;
@@ -166,8 +175,8 @@ class _NativeAudioImpl implements NativeAudio {
   }) async {
     try {
       await _channel.invokeMethod(method, arguments);
-    } catch (e, stack) {
-      onError(e, stack);
+    } catch (e) {
+      if (onError != null) onError(e);
     }
   }
 }
