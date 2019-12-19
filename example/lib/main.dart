@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
 import 'package:native_audio/native_audio.dart';
 
 void main() => runApp(MyApp());
@@ -12,7 +9,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  var _audio = NativeAudio();
+  var _audio = NativeAudioImpl();
   var _isLoaded = false;
   var _isPlaying = false;
   var _status = "stopped";
@@ -38,10 +35,26 @@ class _MyAppState extends State<MyApp> {
               padding: EdgeInsets.all(16.0),
               child: Text(_status, textAlign: TextAlign.center),
             ),
-            if (!_isLoaded) MaterialButton(child: Text("Play"), onPressed: () => _playSampleAudio()),
-            if (_isLoaded) MaterialButton(child: Text("Stop"), onPressed: () => _audio.stop()),
-            if (!_isPlaying) MaterialButton(child: Text("Resume"), onPressed: () => _audio.resume()),
-            if (_isPlaying) MaterialButton(child: Text("Pause"), onPressed: () => _audio.pause()),
+            if (!_isLoaded)
+              MaterialButton(
+                child: Text("Play"),
+                onPressed: () => _playSampleAudio(),
+              ),
+            if (_isLoaded)
+              MaterialButton(
+                child: Text("Stop"),
+                onPressed: () => _audio.stop(),
+              ),
+            if (!_isPlaying)
+              MaterialButton(
+                child: Text("Resume"),
+                onPressed: () => _audio.resume(),
+              ),
+            if (_isPlaying)
+              MaterialButton(
+                child: Text("Pause"),
+                onPressed: () => _audio.pause(),
+              ),
           ],
         ),
       ),
@@ -49,7 +62,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _listenForAudioEvents() {
-    _audio.onLoaded = (audioDuration) {
+    _audio.didLoad = (audioDuration) {
       setState(() {
         _isLoaded = true;
         _isPlaying = true;
@@ -57,19 +70,19 @@ class _MyAppState extends State<MyApp> {
       });
     };
 
-    _audio.onResumed = () {
+    _audio.didResume = () {
       setState(() => _isPlaying = true);
       _status = "resumed";
     };
 
-    _audio.onPaused = () {
+    _audio.didPause = () {
       setState(() {
         _isPlaying = false;
         _status = "paused";
       });
     };
 
-    _audio.onStopped = () {
+    _audio.didStop = () {
       setState(() {
         _isLoaded = false;
         _isPlaying = false;
@@ -77,7 +90,7 @@ class _MyAppState extends State<MyApp> {
       });
     };
 
-    _audio.onCompleted = () {
+    _audio.didComplete = () {
       setState(() {
         _isLoaded = false;
         _isPlaying = false;
@@ -87,10 +100,13 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _playSampleAudio() {
-    _audio.play("https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3",
-        title: "How The Fashion Industry Is Responding To Climate Change",
-        album: "Science Friday",
-        artist: "WNYC Studio",
-        imageUrl: "https://www.sciencefriday.com/wp-content/uploads/2019/09/clothes-close-min.jpg");
+    _audio.play(
+      "https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3",
+      title: "How The Fashion Industry Is Responding To Climate Change",
+      album: "Science Friday",
+      artist: "WNYC Studio",
+      imageUrl:
+          "https://www.sciencefriday.com/wp-content/uploads/2019/09/clothes-close-min.jpg",
+    );
   }
 }

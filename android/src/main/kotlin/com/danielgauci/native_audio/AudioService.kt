@@ -9,15 +9,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.media.AudioManager
-import android.media.session.PlaybackState
+import android.media.AudioManager.*
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.support.v4.media.MediaMetadataCompat
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DURATION
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART
+import android.support.v4.media.MediaMetadataCompat.*
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.ColorInt
@@ -44,21 +40,35 @@ class AudioService : Service() {
     }
 
     // TODO: Confirm that this does not leak the activity
-    var onLoaded: ((Long) -> Unit)? = null
-    var onProgressChanged: ((Long) -> Unit)? = null
-    var onResumed: (() -> Unit)? = null
-    var onPaused: (() -> Unit)? = null
-    var onStopped: (() -> Unit)? = null
-    var onCompleted: (() -> Unit)? = null
+    var onLoad: ((Long) -> Unit)? = null
+    var onProgressChange: ((Long) -> Unit)? = null
+    var onResume: (() -> Unit)? = null
+    var onPause: (() -> Unit)? = null
+    var onStop: (() -> Unit)? = null
+    var onComplete: (() -> Unit)? = null
+    var onError: ((Exception) -> Unit)? = null
 
-    private var currentPlaybackState = PlaybackStateCompat.STATE_STOPPED
+    private var playbackState = PlaybackStateCompat.STATE_STOPPED
     private var oldPlaybackState: Int = Int.MIN_VALUE
-    private var currentPositionInMillis = 0L
-    private var durationInMillis = 0L
+
+    private val isPlaying get() = playbackState == PlaybackStateCompat.STATE_PLAYING
+    /**
+     * Gets the current playback position.
+     *
+     * @return the current audio position in milliseconds
+     */
+    private var audioProgress = 0L
+    /**
+     * Gets the duration of the audio file.
+     *
+     * @return the duration in milliseconds, if no duration is available
+     *         (for example, if streaming live content), -1 is returned.
+     */
+    private var audioDuration = 0L
     private var resumeOnAudioFocus = false
     private var isNotificationShown = false
     private var notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-    private var metadata = MediaMetadataCompat.Builder()
+    private var metadata = Builder()
 
     private val binder by lazy { AudioServiceBinder() }
     private val session by lazy {
@@ -86,22 +96,22 @@ class AudioService : Service() {
 
                 override fun onSkipToNext() {
                     super.onSkipToNext()
-                    forward30()
+                    seekForward()
                 }
 
                 override fun onSkipToPrevious() {
                     super.onSkipToPrevious()
-                    rewind30()
+                    seekBackward()
                 }
 
                 override fun onFastForward() {
                     super.onFastForward()
-                    forward30()
+                    seekForward()
                 }
 
                 override fun onRewind() {
                     super.onRewind()
-                    rewind30()
+                    seekBackward()
                 }
             })
         }
@@ -113,27 +123,25 @@ class AudioService : Service() {
 
     private val audioPlayer by lazy {
         AudioPlayer(
-                onLoaded = {
-                    durationInMillis = it
-                    onLoaded?.invoke(it)
+                onLoad = {
+                    audioDuration = it
+                    onLoad?.invoke(it)
 
-                    metadata.putLong(METADATA_KEY_DURATION, durationInMillis)
+                    metadata.putLong(METADATA_KEY_DURATION, audioDuration)
                     session.setMetadata(metadata.build())
                 },
-                onProgressChanged = {
-                    currentPositionInMillis = it
-                    onProgressChanged?.invoke(it)
+                onProgressChange = {
+                    audioProgress = it
+                    onProgressChange?.invoke(it)
                     updatePlaybackState()
                 },
-                onCompleted = { onCompleted?.invoke() }
+                onComplete = { onComplete?.invoke() }
         )
     }
 
     private val playbackStateBuilder by lazy {
         PlaybackStateCompat.Builder().setActions(
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_FAST_FORWARD or
                         PlaybackStateCompat.ACTION_REWIND or
                         PlaybackStateCompat.ACTION_STOP or
@@ -145,24 +153,24 @@ class AudioService : Service() {
         AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
                 .setOnAudioFocusChangeListener { audioFocus ->
                     when (audioFocus) {
-                        AudioManager.AUDIOFOCUS_GAIN -> {
-                            if (resumeOnAudioFocus && !isPlaying()) {
+                        AUDIOFOCUS_GAIN -> {
+                            if (resumeOnAudioFocus && !isPlaying) {
                                 resume()
                                 resumeOnAudioFocus = false
-                            } else if (isPlaying()) {
+                            } else if (isPlaying) {
                                 // TODO: Set volume to full
                             }
                         }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                        AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                             // TODO: Set volume to duck
                         }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                            if (isPlaying()) {
+                        AUDIOFOCUS_LOSS_TRANSIENT -> {
+                            if (isPlaying) {
                                 resumeOnAudioFocus = true
                                 pause()
                             }
                         }
-                        AudioManager.AUDIOFOCUS_LOSS -> {
+                        AUDIOFOCUS_LOSS -> {
                             resumeOnAudioFocus = false
                             stop()
                         }
@@ -182,15 +190,9 @@ class AudioService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MediaButtonReceiver.handleIntent(session, intent)
 
-        headsetManager.registerHeadsetPlugReceiver(
-                this,
-                onConnected = {},
-                onDisconnected = { pause() })
+        headsetManager.registerHeadsetPlugReceiver(this, onConnected = { }, onDisconnected = { pause() })
 
-        bluetoothManager.registerBluetoothReceiver(
-                this,
-                onConnected = {},
-                onDisconnected = { pause() })
+        bluetoothManager.registerBluetoothReceiver(this, onConnected = {}, onDisconnected = { pause() })
 
         return START_NOT_STICKY
     }
@@ -212,15 +214,10 @@ class AudioService : Service() {
         audioPlayer.play(url)
 
         session.isActive = true
-        currentPlaybackState = PlaybackStateCompat.STATE_PLAYING
+        playbackState = PlaybackStateCompat.STATE_PLAYING
         updatePlaybackState()
 
-        showNotification(
-                title = title ?: "",
-                artist = artist ?: "",
-                album = album ?: "",
-                imageUrl = imageUrl ?: ""
-        )
+        showNotification(title = title, artist = artist, album = album, imageUrl = imageUrl)
     }
 
     fun resume() {
@@ -228,19 +225,19 @@ class AudioService : Service() {
 
         audioPlayer.resume()
 
-        currentPlaybackState = PlaybackStateCompat.STATE_PLAYING
+        playbackState = PlaybackStateCompat.STATE_PLAYING
         updatePlaybackState()
 
-        onResumed?.invoke()
+        onResume?.invoke()
     }
 
     fun pause() {
         audioPlayer.pause()
 
-        currentPlaybackState = PlaybackStateCompat.STATE_PAUSED
+        playbackState = PlaybackStateCompat.STATE_PAUSED
         updatePlaybackState()
 
-        onPaused?.invoke()
+        onPause?.invoke()
 
         if (!resumeOnAudioFocus) abandonFocus()
     }
@@ -248,33 +245,33 @@ class AudioService : Service() {
     fun stop() {
         audioPlayer.stop()
 
-        currentPlaybackState = PlaybackStateCompat.STATE_STOPPED
+        playbackState = PlaybackStateCompat.STATE_STOPPED
 
         cancelNotification()
         session.isActive = false
 
-        onStopped?.invoke()
+        onStop?.invoke()
 
         abandonFocus()
 
         stopSelf()
     }
 
-    fun seekTo(timeInMillis: Long) {
-        audioPlayer.seekTo(timeInMillis)
+    fun seekTo(time: Long) {
+        audioPlayer.seekTo(time)
     }
 
-    private fun forward30() {
-        val forwardTime = TimeUnit.SECONDS.toMillis(30)
-        if (durationInMillis - currentPositionInMillis > forwardTime) {
-            seekTo(currentPositionInMillis + forwardTime.toInt())
+    private fun seekForward(to: Long = 30) {
+        val forwardTime = TimeUnit.SECONDS.toMillis(to)
+        if (audioDuration - audioProgress > forwardTime) {
+            seekTo(audioProgress + forwardTime.toInt())
         }
     }
 
-    private fun rewind30() {
-        val rewindTime = TimeUnit.SECONDS.toMillis(30)
-        if (currentPositionInMillis - rewindTime > 0) {
-            seekTo(currentPositionInMillis - rewindTime.toInt())
+    private fun seekBackward(to: Long = 30) {
+        val rewindTime = TimeUnit.SECONDS.toMillis(to)
+        if (audioProgress - rewindTime > 0) {
+            seekTo(audioProgress - rewindTime.toInt())
         }
     }
 
@@ -300,15 +297,16 @@ class AudioService : Service() {
     }
 
     private fun updateNotificationBuilder(
-            title: String,
-            artist: String,
-            album: String,
-            @ColorInt notificationColor: Int? = null,
-            image: Bitmap? = null
+            title: String?,
+            artist: String?,
+            album: String?,
+            image: Bitmap? = null,
+            @ColorInt notificationColor: Int? = null
     ) {
-        metadata.putString(METADATA_KEY_TITLE, title)
-                .putString(METADATA_KEY_ARTIST, artist)
-                .putBitmap(METADATA_KEY_ALBUM_ART, image)
+
+        title?.let { metadata.putString(METADATA_KEY_TITLE, it) }
+        artist?.let { metadata.putString(METADATA_KEY_ARTIST, it) }
+        image?.let { metadata.putBitmap(METADATA_KEY_ALBUM_ART, it) }
 
         session.setMetadata(metadata.build())
 
@@ -324,21 +322,21 @@ class AudioService : Service() {
                 .setShowCancelButton(true)
 
         notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                .setStyle(mediaStyle)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setOnlyAlertOnce(true)
-                .setOngoing(true)
-                .setSmallIcon(R.drawable.play)
                 .setContentIntent(contentIntent)
+                .setSmallIcon(R.drawable.play)
                 .setDeleteIntent(stopIntent)
-                .setContentTitle(title)
-                .setContentText(album)
-                .setSubText(artist)
+                .setOnlyAlertOnce(true)
+                .setStyle(mediaStyle)
+                .setOngoing(true)
+
+        artist?.let { notificationBuilder.setSubText(it) }
+        album?.let { notificationBuilder.setContentText(it) }
+        title?.let { notificationBuilder.setContentTitle(it) }
 
         notificationBuilder.apply {
-            if (image != null) setLargeIcon(image)
-            if (notificationColor != null) color = notificationColor
-
+            image?.let { setLargeIcon(it) }
+            notificationColor?.let { color = it }
             // Add play/pause action
             setNotificationButtons(this)
         }
@@ -361,7 +359,7 @@ class AudioService : Service() {
             val rewindAction = NotificationCompat.Action.Builder(
                     R.drawable.rewind_30,
                     "Rewind",
-                    MediaButtonReceiver.buildMediaButtonPendingIntent(this@AudioService, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                    MediaButtonReceiver.buildMediaButtonPendingIntent(this@AudioService, PlaybackStateCompat.ACTION_REWIND)
             ).build()
             addAction(rewindAction)
 
@@ -369,64 +367,56 @@ class AudioService : Service() {
             val forwardAction = NotificationCompat.Action.Builder(
                     R.drawable.fast_forward_30,
                     "Fast Forward",
-                    MediaButtonReceiver.buildMediaButtonPendingIntent(this@AudioService, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+                    MediaButtonReceiver.buildMediaButtonPendingIntent(this@AudioService, PlaybackStateCompat.ACTION_FAST_FORWARD)
             ).build()
             addAction(forwardAction)
         }
     }
 
-    private fun showNotification(title: String, artist: String, album: String, imageUrl: String? = null) {
+    private fun showNotification(title: String?, artist: String?, album: String?, imageUrl: String? = null) {
         if (imageUrl.isNullOrBlank()) {
             // No image is set, show notification
             updateNotificationBuilder(title, artist, album)
             startForeground(NOTIFICATION_ID, notificationBuilder.build())
             isNotificationShown = true
-        } else {
-            // Get image show notification
-            Glide.with(this)
-                    .asBitmap()
-                    .load(imageUrl)
-                    .into(object : SimpleTarget<Bitmap>() {
-                        override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                            Palette.from(resource).generate { palette ->
-                                palette?.let {
-                                    // Palette generated, show notification with bitmap and palette
-                                    val color = it.getVibrantColor(Color.WHITE)
-                                    updateNotificationBuilder(
-                                            title = title,
-                                            artist = artist,
-                                            album = album,
-                                            notificationColor = color,
-                                            image = resource
-                                    )
 
-                                    startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                                    isNotificationShown = true
-                                } ?: run {
-                                    // Failed to generate palette, show notification with bitmap
-                                    updateNotificationBuilder(
-                                            title = title,
-                                            artist = artist,
-                                            album = album,
-                                            image = resource
-                                    )
+            return
+        }
 
-                                    startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                                    isNotificationShown = true
-                                }
+        // Get image show notification
+        Glide.with(this)
+                .asBitmap()
+                .load(imageUrl)
+                .into(object : SimpleTarget<Bitmap>() {
+                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                        Palette.from(resource).generate { palette ->
+                            palette?.let {
+                                // Palette generated, show notification with bitmap and palette
+                                val color = it.getVibrantColor(Color.WHITE)
+                                updateNotificationBuilder(title = title, artist = artist, album = album, notificationColor = color, image = resource)
+
+                                startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                                isNotificationShown = true
+                            } ?: run {
+                                // Failed to generate palette, show notification with bitmap
+                                updateNotificationBuilder(title = title, artist = artist, album = album, image = resource)
+
+                                startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                                isNotificationShown = true
                             }
                         }
+                    }
 
-                        override fun onLoadFailed(errorDrawable: Drawable?) {
-                            super.onLoadFailed(errorDrawable)
+                    override fun onLoadFailed(errorDrawable: Drawable?) {
+                        super.onLoadFailed(errorDrawable)
 
-                            // Failed to load image, show notification
-                            updateNotificationBuilder(title, artist, album)
-                            startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                            isNotificationShown = true
-                        }
-                    })
-        }
+                        // Failed to load image, show notification
+                        updateNotificationBuilder(title, artist, album)
+                        startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                        isNotificationShown = true
+                    }
+                })
+
     }
 
     private fun cancelNotification() {
@@ -437,7 +427,7 @@ class AudioService : Service() {
 
     private fun updatePlaybackState() {
         val playbackState = playbackStateBuilder
-                .setState(currentPlaybackState, currentPositionInMillis, 0f)
+                .setState(playbackState, audioProgress, 0f)
                 .build()
 
         // Update session
@@ -445,18 +435,18 @@ class AudioService : Service() {
 
         // Try to update notification
         if (isNotificationShown) {
-            val stateChanged = currentPlaybackState != oldPlaybackState
+            val stateChanged = this.playbackState != oldPlaybackState
 
             // Update buttons based on current state
-            setNotificationButtons(notificationBuilder, isPlaying())
+            setNotificationButtons(notificationBuilder, isPlaying)
 
             // Allow notification to be dismissed if not playing
-            notificationBuilder.setOngoing(isPlaying())
+            notificationBuilder.setOngoing(isPlaying)
 
-            if (isPlaying() && stateChanged) {
+            if (isPlaying && stateChanged) {
                 // Update notification and ensure that notification is in foreground as it could have been stopped before
                 startForeground(NOTIFICATION_ID, notificationBuilder.build())
-            } else if (isPlaying()) {
+            } else if (isPlaying) {
                 // Notification was already in foreground, update with the latest information
                 notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
             } else {
@@ -467,10 +457,8 @@ class AudioService : Service() {
         }
 
         // Update playback state
-        oldPlaybackState = currentPlaybackState
+        oldPlaybackState = this.playbackState
     }
-
-    private fun isPlaying() = currentPlaybackState == PlaybackStateCompat.STATE_PLAYING
 
     inner class AudioServiceBinder : Binder() {
 
