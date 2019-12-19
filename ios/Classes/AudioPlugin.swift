@@ -69,13 +69,16 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         switch (method) {
         case .play:
             guard let arguments = call.arguments as? NSDictionary,
-                let url =  arguments["url"] as? String,
-                let title = arguments["title"] as? String else {
-                    return
+                let url =  arguments["url"] as? String else {
+                    return result(FlutterError.init(
+                        code: "IllegalArgumentException",
+                        message: "Argument url is required when calling the play method",
+                        details: nil
+                    ))
             }
             player.play(
                 url: url,
-                title: title,
+                title: arguments["title"] as? String,
                 artist: arguments["artist"] as? String,
                 album: arguments["album"] as? String,
                 imageUrl: arguments["imageUrl"] as? String
@@ -93,7 +96,11 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         case .seekTo:
             guard let arguments = call.arguments as? NSDictionary,
                 let time = arguments["timeInMillis"] as? Int else {
-                    return
+                    return result(FlutterError.init(
+                        code: "IllegalArgumentException",
+                        message: "Argument timeInMillis is required when calling the seekTo method",
+                        details: nil
+                    ))
             }
             player.seekTo(time: time)
         }

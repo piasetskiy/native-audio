@@ -24,7 +24,7 @@ protocol AudioPlayerDelegate: class {
 protocol AudioPlayer {
     var delegate: AudioPlayerDelegate? { get set }
     
-    func play(url: String, title: String, artist: String?, album: String?, imageUrl: String?)
+    func play(url: String, title: String?, artist: String?, album: String?, imageUrl: String?)
     func seekTo(time: Int)
     func resume()
     func pause()
@@ -110,7 +110,7 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         }
     }
     
-    func play(url: String, title: String, artist: String?, album: String?, imageUrl: String?) {
+    func play(url: String, title: String?, artist: String?, album: String?, imageUrl: String?) {
         // Setup player item
         guard let audioUrl = URL(string: url) else { return }
         playerItem = .init(url: audioUrl)
@@ -275,8 +275,12 @@ private extension AudioPlayerImpl {
         }
     }
     
-    func updateNowPlayingInfoCenter(title: String, artist: String?, album: String?, imageUrl: String?) {
-        playingInfoCenter.nowPlayingInfo = [MPMediaItemPropertyTitle: title, MPMediaItemPropertySkipCount: "15"]
+    func updateNowPlayingInfoCenter(title: String?, artist: String?, album: String?, imageUrl: String?) {
+        playingInfoCenter.nowPlayingInfo = [ MPMediaItemPropertySkipCount: "15"]
+        
+        if let title = title {
+            playingInfoCenter.nowPlayingInfo?[MPMediaItemPropertyTitle] = title
+        }
         
         if let album = album {
             playingInfoCenter.nowPlayingInfo?[MPMediaItemPropertyAlbumTitle] = album
