@@ -17,7 +17,7 @@ abstract class NativeAudio {
 
   void play(
     String url, {
-    @required String title,
+    String title,
     String artist,
     String album,
     String imageUrl,
@@ -77,7 +77,7 @@ class _NativeAudioImpl implements NativeAudio {
   @override
   void play(
     String url, {
-    @required String title,
+    String title,
     String artist,
     String album,
     String imageUrl,
