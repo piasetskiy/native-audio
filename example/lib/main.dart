@@ -9,7 +9,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  var _audio = NativeAudioImpl();
+  final _audio = NativeAudio.build();
   var _isLoaded = false;
   var _isPlaying = false;
   var _status = "stopped";
@@ -21,45 +21,43 @@ class _MyAppState extends State<MyApp> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Native Audio'),
+  Widget build(BuildContext context) => MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            title: const Text('Native Audio'),
+          ),
+          body: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(_status, textAlign: TextAlign.center),
+              ),
+              if (!_isLoaded)
+                MaterialButton(
+                  child: Text("Play"),
+                  onPressed: () => _playSampleAudio(),
+                ),
+              if (_isLoaded)
+                MaterialButton(
+                  child: Text("Stop"),
+                  onPressed: () => _audio.stop(),
+                ),
+              if (!_isPlaying && _isLoaded)
+                MaterialButton(
+                  child: Text("Resume"),
+                  onPressed: () => _audio.resume(),
+                ),
+              if (_isPlaying && _isLoaded)
+                MaterialButton(
+                  child: Text("Pause"),
+                  onPressed: () => _audio.pause(),
+                ),
+            ],
+          ),
         ),
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(_status, textAlign: TextAlign.center),
-            ),
-            if (!_isLoaded)
-              MaterialButton(
-                child: Text("Play"),
-                onPressed: () => _playSampleAudio(),
-              ),
-            if (_isLoaded)
-              MaterialButton(
-                child: Text("Stop"),
-                onPressed: () => _audio.stop(),
-              ),
-            if (!_isPlaying)
-              MaterialButton(
-                child: Text("Resume"),
-                onPressed: () => _audio.resume(),
-              ),
-            if (_isPlaying)
-              MaterialButton(
-                child: Text("Pause"),
-                onPressed: () => _audio.pause(),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+      );
 
   void _listenForAudioEvents() {
     _audio.didLoad = (audioDuration) {

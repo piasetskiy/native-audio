@@ -2,6 +2,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 abstract class NativeAudio {
+  VoidCallback didResume;
+  VoidCallback didPause;
+  VoidCallback didStop;
+  VoidCallback didComplete;
+  void Function(Duration) didLoad;
+  void Function(Duration) didChangeProgress;
+  void Function(Exception, StackTrace) onError;
+
+  factory NativeAudio.build() => _NativeAudioImpl();
+
   void play(
     String url, {
     @required String title,
@@ -16,7 +26,7 @@ abstract class NativeAudio {
   void release();
 }
 
-class NativeAudioImpl implements NativeAudio {
+class _NativeAudioImpl implements NativeAudio {
   static const _invokePlayMethodCall = "play";
   static const _playMethodCallUrlArg = "url";
   static const _playMethodCallTitleArg = "title";
@@ -39,14 +49,14 @@ class NativeAudioImpl implements NativeAudio {
   static const _methodCallOnComplete = "onComplete";
   static const _methodCallOnProgressChange = "onProgressChange";
 
-  factory NativeAudioImpl() {
-    return _instance ??= NativeAudioImpl.private(
+  factory _NativeAudioImpl() {
+    return _instance ??= _NativeAudioImpl.private(
       MethodChannel('com.danielgauci.native_audio'),
     );
   }
 
   @visibleForTesting
-  NativeAudioImpl.private(this._channel);
+  _NativeAudioImpl.private(this._channel);
 
   static NativeAudio _instance;
 

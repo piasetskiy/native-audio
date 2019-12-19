@@ -16,7 +16,7 @@ void main() {
   });
 
   test('play', () async {
-    final audio = NativeAudioImpl();
+    final audio = NativeAudio.build();
     audio.play(
       "some-url",
       title: "some-title",
