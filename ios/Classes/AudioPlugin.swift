@@ -5,7 +5,7 @@ import MediaPlayer
 
 public class AudioPlugin: NSObject, FlutterPlugin {
     
-    enum SupportedInvokeCall: String {
+    enum SupportedInvokeMethodCall: String {
         case onLoad = "onLoaded"
         case onPause = "onPause"
         case onResume = "onResume"
@@ -14,7 +14,7 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         case onProgressChange = "onProgressChange"
     }
     
-    private enum SupportedCall: String {
+    private enum SupportedMethodCall: String {
         case play = "play"
         case resume = "resume"
         case pause = "pause"
@@ -23,15 +23,15 @@ public class AudioPlugin: NSObject, FlutterPlugin {
         
         init?(method: String?) {
             switch method {
-            case SupportedCall.play.rawValue:
+            case SupportedMethodCall.play.rawValue:
                 self = .play
-            case SupportedCall.resume.rawValue:
+            case SupportedMethodCall.resume.rawValue:
                 self = .resume
-            case SupportedCall.pause.rawValue:
+            case SupportedMethodCall.pause.rawValue:
                 self = .pause
-            case SupportedCall.stop.rawValue:
+            case SupportedMethodCall.stop.rawValue:
                 self = .stop
-            case SupportedCall.seekTo.rawValue:
+            case SupportedMethodCall.seekTo.rawValue:
                 self = .seekTo
             default:
                 return nil
@@ -61,7 +61,7 @@ public class AudioPlugin: NSObject, FlutterPlugin {
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        guard let player = player, let method = SupportedCall(method: call.method) else {
+        guard let player = player, let method = SupportedMethodCall(method: call.method) else {
             result(FlutterMethodNotImplemented)
             return
         }
@@ -135,7 +135,7 @@ extension AudioPlugin: AudioPlayerDelegate {
 }
 
 fileprivate extension FlutterMethodChannel {
-    func invokeMethod(method: AudioPlugin.SupportedInvokeCall, arguments: Any? = nil) {
+    func invokeMethod(method: AudioPlugin.SupportedInvokeMethodCall, arguments: Any? = nil) {
         invokeMethod(method.rawValue, arguments: arguments)
     }
 }

@@ -19,20 +19,20 @@ class AudioPlugin(private val context: Context, private val channel: MethodChann
     companion object {
         private const val CHANNEL = "com.danielgauci.native_audio"
 
-        private const val INVOKE_PLAY_METHOD_CALL = "play"
-        private const val PLAY_METHOD_CALL_URL_ARG = "url"
-        private const val PLAY_METHOD_CALL_TITLE_ARG = "title"
-        private const val PLAY_METHOD_CALL_ALBUM_ARG = "album"
-        private const val PLAY_METHOD_CALL_ARTIST_ARG = "artist"
-        private const val PLAY_METHOD_CALL_IMAGE_ARG = "imageUrl"
+        private const val PLAY_METHOD_CALL = "play"
+        private const val PLAY_METHOD_URL_ARG = "url"
+        private const val PLAY_METHOD_TITLE_ARG = "title"
+        private const val PLAY_METHOD_ALBUM_ARG = "album"
+        private const val PLAY_METHOD_ARTIST_ARG = "artist"
+        private const val PLAY_METHOD_IMAGE_ARG = "imageUrl"
 
-        private const val INVOKE_STOP_METHOD_CALL = "stop"
-        private const val INVOKE_PAUSE_METHOD_CALL = "pause"
-        private const val INVOKE_RESUME_METHOD_CALL = "resume"
-        private const val INVOKE_RELEASE_METHOD_CALL = "release"
+        private const val STOP_METHOD_CALL = "stop"
+        private const val PAUSE_METHOD_CALL = "pause"
+        private const val RESUME_METHOD_CALL = "resume"
+        private const val RELEASE_METHOD_CALL = "release"
 
-        private const val INVOKE_SEEK_TO_METHOD_CALL = "seekTo"
-        private const val SEEK_TO_METHOD_CALL_TIME_ARG = "timeInMillis"
+        private const val SEEK_TO_METHOD_CALL = "seekTo"
+        private const val SEEK_TO_METHOD_TIME_ARG = "timeInMillis"
 
         private const val METHOD_CALL_ON_LOAD = "onLoad"
         private const val METHOD_CALL_ON_STOP = "onStop"
@@ -73,24 +73,24 @@ class AudioPlugin(private val context: Context, private val channel: MethodChann
             }
 
             when (call.method) {
-                INVOKE_PLAY_METHOD_CALL -> {
-                    withArgument(call, PLAY_METHOD_CALL_URL_ARG) { url: String ->
+                PLAY_METHOD_CALL -> {
+                    withArgument(call, PLAY_METHOD_URL_ARG) { url: String ->
                         // Get optional arguments
-                        val title = call.argument<String>(PLAY_METHOD_CALL_TITLE_ARG)
-                        val artist = call.argument<String>(PLAY_METHOD_CALL_ARTIST_ARG)
-                        val album = call.argument<String>(PLAY_METHOD_CALL_ALBUM_ARG)
-                        val imageUrl = call.argument<String>(PLAY_METHOD_CALL_IMAGE_ARG)
+                        val title = call.argument<String>(PLAY_METHOD_TITLE_ARG)
+                        val artist = call.argument<String>(PLAY_METHOD_ARTIST_ARG)
+                        val album = call.argument<String>(PLAY_METHOD_ALBUM_ARG)
+                        val imageUrl = call.argument<String>(PLAY_METHOD_IMAGE_ARG)
 
                         // Call service
                         service.play(url, title, artist, album, imageUrl)
                     }
                 }
-                INVOKE_RESUME_METHOD_CALL -> service.resume()
-                INVOKE_PAUSE_METHOD_CALL -> service.pause()
-                INVOKE_STOP_METHOD_CALL -> service.stop()
-                INVOKE_RELEASE_METHOD_CALL -> releaseAudioService()
-                INVOKE_SEEK_TO_METHOD_CALL -> {
-                    withArgument(call, SEEK_TO_METHOD_CALL_TIME_ARG) { time: Int ->
+                RESUME_METHOD_CALL -> service.resume()
+                PAUSE_METHOD_CALL -> service.pause()
+                STOP_METHOD_CALL -> service.stop()
+                RELEASE_METHOD_CALL -> releaseAudioService()
+                SEEK_TO_METHOD_CALL -> {
+                    withArgument(call, SEEK_TO_METHOD_TIME_ARG) { time: Int ->
                         service.seekTo(time.toLong())
                     }
                 }
@@ -100,9 +100,7 @@ class AudioPlugin(private val context: Context, private val channel: MethodChann
 
     private fun <T> withArgument(methodCall: MethodCall, argumentKey: String, withArgument: (T) -> Unit) {
         val argument = methodCall.argument<T>(argumentKey)
-                ?: throw IllegalArgumentException(
-                        "Argument $argumentKey is required when calling the ${methodCall.method} method."
-                )
+                ?: throw IllegalArgumentException("Argument $argumentKey is required when calling the ${methodCall.method} method.")
 
         withArgument(argument)
     }
