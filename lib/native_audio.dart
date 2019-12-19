@@ -57,7 +57,7 @@ class NativeAudioImpl implements NativeAudio {
   VoidCallback didStop;
   VoidCallback didComplete;
   void Function(Duration) didLoad;
-  void Function(Duration) onProgressChange;
+  void Function(Duration) didChangeProgress;
   void Function(Exception, StackTrace) onError;
 
   @override
@@ -141,8 +141,8 @@ class NativeAudioImpl implements NativeAudio {
 
           /// Current progress in milliseconds
           final int progress = methodCall.arguments;
-          if (onProgressChange != null && progress != null)
-            onProgressChange(Duration(milliseconds: progress));
+          if (didChangeProgress != null && progress != null)
+            didChangeProgress(Duration(milliseconds: progress));
           break;
       }
 

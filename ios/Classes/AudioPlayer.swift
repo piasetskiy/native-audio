@@ -252,9 +252,10 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
 @available(iOS 10.0, *)
 private extension AudioPlayerImpl {
     func seekForward() -> Bool {
-        if (totalDuration > currentProgress + seekForwardTime) {
+        let time = currentProgress + seekForwardTime
+        if (totalDuration > time) {
             // Episode is loaded and there is enough time to seek forward
-            seekTo(time: currentProgress + seekForwardTime)
+            seekTo(time: time)
             return true
         } else {
             debugPrint("Unable to seek forward, episode is not loaded or there is not enough time to seek forward")
@@ -263,9 +264,10 @@ private extension AudioPlayerImpl {
     }
     
     func seekBackward() -> Bool {
-        if (currentProgress - seekBackwardTime > 0) {
+        let time = currentProgress - seekBackwardTime
+        if (time > 0) {
             // Episode is loaded and there is enough time to seek backward
-            seekTo(time: currentProgress - seekBackwardTime)
+            seekTo(time: time)
             return true
         } else {
             debugPrint("Unable to seek backward, episode is not loaded or there is not enough time to seek backward")

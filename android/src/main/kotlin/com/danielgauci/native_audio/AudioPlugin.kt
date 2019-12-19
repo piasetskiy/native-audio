@@ -14,34 +14,33 @@ import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import io.flutter.view.FlutterNativeView
 
-class NativeAudioPlugin(
-        private val context: Context,
-        private val channel: MethodChannel
-) : MethodCallHandler {
+class AudioPlugin(private val context: Context, private val channel: MethodChannel) : MethodCallHandler {
 
     companion object {
-
         private const val CHANNEL = "com.danielgauci.native_audio"
 
-        private const val NATIVE_METHOD_PLAY = "play"
-        private const val NATIVE_METHOD_PLAY_ARG_URL = "url"
-        private const val NATIVE_METHOD_PLAY_ARG_TITLE = "title"
-        private const val NATIVE_METHOD_PLAY_ARG_ARTIST = "artist"
-        private const val NATIVE_METHOD_PLAY_ARG_ALBUM = "album"
-        private const val NATIVE_METHOD_PLAY_ARG_IMAGE_URL = "imageUrl"
-        private const val NATIVE_METHOD_RESUME = "resume"
-        private const val NATIVE_METHOD_PAUSE = "pause"
-        private const val NATIVE_METHOD_STOP = "stop"
-        private const val NATIVE_METHOD_SEEK_TO = "seekTo"
-        private const val NATIVE_METHOD_SEEK_TO_ARG_TIME = "timeInMillis"
-        private const val NATIVE_METHOD_RELEASE = "release"
+        private const val INVOKE_PLAY_METHOD_CALL = "play"
+        private const val PLAY_METHOD_CALL_URL_ARG = "url"
+        private const val PLAY_METHOD_CALL_TITLE_ARG = "title"
+        private const val PLAY_METHOD_CALL_ALBUM_ARG = "album"
+        private const val PLAY_METHOD_CALL_ARTIST_ARG = "artist"
+        private const val PLAY_METHOD_CALL_IMAGE_ARG = "imageUrl"
 
-        private const val FLUTTER_METHOD_ON_LOADED = "onLoaded"
-        private const val FLUTTER_METHOD_ON_PROGRESS_CHANGED = "onProgressChanged"
-        private const val FLUTTER_METHOD_ON_RESUMED = "onResumed"
-        private const val FLUTTER_METHOD_ON_PAUSED = "onPaused"
-        private const val FLUTTER_METHOD_ON_STOPPED = "onStopped"
-        private const val FLUTTER_METHOD_ON_COMPLETED = "onCompleted"
+        private const val INVOKE_STOP_METHOD_CALL = "stop"
+        private const val INVOKE_PAUSE_METHOD_CALL = "pause"
+        private const val INVOKE_RESUME_METHOD_CALL = "resume"
+        private const val INVOKE_RELEASE_METHOD_CALL = "release"
+
+        private const val INVOKE_SEEK_TO_METHOD_CALL = "seekTo"
+        private const val SEEK_TO_METHOD_CALL_TIME_ARG = "timeInMillis"
+
+        private const val METHOD_CALL_ON_LOAD = "onLoad"
+        private const val METHOD_CALL_ON_STOP = "onStop"
+        private const val METHOD_CALL_ON_PAUSE = "onPause"
+        private const val METHOD_CALL_ON_RESUME = "onResume"
+        private const val METHOD_CALL_ON_COMPLETE = "onComplete"
+        private const val METHOD_CALL_ON_PROGRESS_CHANGE = "onProgressChange"
+        private const val METHOD_CALL_ON_ERROR = "onError"
 
         private var pluginRegistrantCallback: PluginRegistry.PluginRegistrantCallback? = null
 
@@ -53,7 +52,7 @@ class NativeAudioPlugin(
         @JvmStatic
         fun registerWith(registrar: Registrar) {
             val channel = MethodChannel(registrar.messenger(), CHANNEL)
-            channel.setMethodCallHandler(NativeAudioPlugin(registrar.context(), channel))
+            channel.setMethodCallHandler(AudioPlugin(registrar.context(), channel))
         }
     }
 
@@ -74,27 +73,25 @@ class NativeAudioPlugin(
             }
 
             when (call.method) {
-                NATIVE_METHOD_PLAY -> {
-                    withArgument(call, NATIVE_METHOD_PLAY_ARG_URL) { url: String ->
+                INVOKE_PLAY_METHOD_CALL -> {
+                    withArgument(call, PLAY_METHOD_CALL_URL_ARG) { url: String ->
                         // Get optional arguments
-                        val title = call.argument<String>(NATIVE_METHOD_PLAY_ARG_TITLE)
-                        val artist = call.argument<String>(NATIVE_METHOD_PLAY_ARG_ARTIST)
-                        val album = call.argument<String>(NATIVE_METHOD_PLAY_ARG_ALBUM)
-                        val imageUrl = call.argument<String>(NATIVE_METHOD_PLAY_ARG_IMAGE_URL)
+                        val title = call.argument<String>(PLAY_METHOD_CALL_TITLE_ARG)
+                        val artist = call.argument<String>(PLAY_METHOD_CALL_ARTIST_ARG)
+                        val album = call.argument<String>(PLAY_METHOD_CALL_ALBUM_ARG)
+                        val imageUrl = call.argument<String>(PLAY_METHOD_CALL_IMAGE_ARG)
 
                         // Call service
-                        withService {
-                            it.play(url, title, artist, album, imageUrl)
-                        }
+                        service.play(url, title, artist, album, imageUrl)
                     }
                 }
-                NATIVE_METHOD_RESUME -> service.resume()
-                NATIVE_METHOD_PAUSE -> service.pause()
-                NATIVE_METHOD_STOP -> service.stop()
-                NATIVE_METHOD_RELEASE -> releaseAudioService()
-                NATIVE_METHOD_SEEK_TO -> {
-                    withArgument(call, NATIVE_METHOD_SEEK_TO_ARG_TIME) { timeInMillis: Int ->
-                        service.seekTo(timeInMillis.toLong())
+                INVOKE_RESUME_METHOD_CALL -> service.resume()
+                INVOKE_PAUSE_METHOD_CALL -> service.pause()
+                INVOKE_STOP_METHOD_CALL -> service.stop()
+                INVOKE_RELEASE_METHOD_CALL -> releaseAudioService()
+                INVOKE_SEEK_TO_METHOD_CALL -> {
+                    withArgument(call, SEEK_TO_METHOD_CALL_TIME_ARG) { time: Int ->
+                        service.seekTo(time.toLong())
                     }
                 }
             }
@@ -103,14 +100,16 @@ class NativeAudioPlugin(
 
     private fun <T> withArgument(methodCall: MethodCall, argumentKey: String, withArgument: (T) -> Unit) {
         val argument = methodCall.argument<T>(argumentKey)
-                ?: throw IllegalArgumentException("Argument $argumentKey is required when calling the ${methodCall.method} method.")
+                ?: throw IllegalArgumentException(
+                        "Argument $argumentKey is required when calling the ${methodCall.method} method."
+                )
 
         withArgument(argument)
     }
 
     private fun withService(withService: (AudioService) -> Unit) {
         if (audioService == null) {
-            // Audio service not available yes, bind and setup
+            // Audio service not available yet, bind and setup
             serviceConnection = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                     val service = (binder as AudioService.AudioServiceBinder).getService()
@@ -127,62 +126,70 @@ class NativeAudioPlugin(
 
             val serviceIntent = Intent(context, AudioService::class.java)
             if (!context.isServiceRunning(AudioService::class.java)) context.startService(serviceIntent)
-            context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+            serviceConnection?.let { context.bindService(serviceIntent, it, Context.BIND_AUTO_CREATE) }
 
             // Return and wait for service to be connected
             return
         }
 
         // Call lambda with service
-        withService(audioService!!)
+        audioService?.let { withService(it) }
     }
 
     private fun bindAudioServiceWithChannel(service: AudioService) {
         service.apply {
             // Notify flutter with audio updates
-            onLoaded = {
+            onLoad = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_LOADED, it)
+                    channel.invokeMethod(METHOD_CALL_ON_LOAD, it)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }
             }
 
-            onProgressChanged = {
+            onProgressChange = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_PROGRESS_CHANGED, it)
+                    channel.invokeMethod(METHOD_CALL_ON_PROGRESS_CHANGE, it)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }
             }
 
-            onResumed = {
+            onResume = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_RESUMED, null)
+                    channel.invokeMethod(METHOD_CALL_ON_RESUME, null)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }
             }
 
-            onPaused = {
+            onPause = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_PAUSED, null)
+                    channel.invokeMethod(METHOD_CALL_ON_PAUSE, null)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }
             }
 
-            onStopped = {
+            onStop = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_STOPPED, null)
+                    channel.invokeMethod(METHOD_CALL_ON_STOP, null)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }
             }
 
-            onCompleted = {
+            onComplete = {
                 try {
-                    channel.invokeMethod(FLUTTER_METHOD_ON_COMPLETED, null)
+                    channel.invokeMethod(METHOD_CALL_ON_COMPLETE, null)
+                } catch (e: Exception) {
+                    Log.e(this::class.java.simpleName, e.message, e)
+                }
+            }
+
+            onError = {
+                try {
+                    channel.invokeMethod(METHOD_CALL_ON_ERROR, it)
                 } catch (e: Exception) {
                     Log.e(this::class.java.simpleName, e.message, e)
                 }

@@ -2,13 +2,14 @@ package com.danielgauci.native_audio
 
 import android.media.MediaPlayer
 import android.os.Handler
-import android.util.Log
 import java.util.concurrent.TimeUnit
+import kotlin.Exception
 
 class AudioPlayer(
-        private val onLoaded: ((duration: Long) -> Unit)? = null,
-        private val onProgressChanged: ((currentTime: Long) -> Unit)? = null,
-        private val onCompleted: (() -> Unit)? = null
+        private val onLoad: ((duration: Long) -> Unit)? = null,
+        private val onProgressChange: ((currentTime: Long) -> Unit)? = null,
+        private val onComplete: (() -> Unit)? = null,
+        private val onError: ((error: Exception) -> Unit)? = null
 ) {
 
     private var mediaPlayer: MediaPlayer? = null
@@ -27,28 +28,48 @@ class AudioPlayer(
     }
 
     fun resume() {
-        mediaPlayer?.apply { if (isLoaded && !isPlaying) start() }
+        mediaPlayer?.apply {
+            if (isLoaded && !isPlaying) start()
+        }
         startListeningForProgress()
     }
 
     fun pause() {
-        mediaPlayer?.apply { if (isPlaying) pause() }
+        mediaPlayer?.apply {
+            if (!isPlaying) return
+
+            try {
+                pause()
+            } catch (e: Exception) {
+                onError?.invoke(e)
+            }
+        }
         stopListeningForProgress()
     }
 
     fun stop(release: Boolean = true) {
         mediaPlayer?.apply {
-            if (isPlaying) {
-                this.stop()
-                this.reset()
+            if (!isPlaying) { return }
+            try {
+                stop()
+                reset()
+            } catch (e: Exception) {
+                onError?.invoke(e)
             }
         }
 
         if (release) release()
     }
 
-    fun seekTo(timeInMillis: Long) {
-        mediaPlayer?.apply { if (isLoaded) seekTo(timeInMillis.toInt()) }
+    /**
+     * @param time the offset time in milliseconds from the start to seek to
+     */
+    fun seekTo(time: Long) {
+        try {
+            mediaPlayer?.apply { if (isLoaded) seekTo(time.toInt()) }
+        } catch (e: Exception) {
+            onError?.invoke(e)
+        }
     }
 
     fun release() {
@@ -61,16 +82,13 @@ class AudioPlayer(
 
     private fun loadAudio(url: String) {
         mediaPlayer?.apply {
-            setOnErrorListener { mp, what, extra ->
-                Log.d(this::class.java.simpleName, "OnError - Error code: $what Extra code: $extra")
-
-                // Return false to trigger on complete
-                false
+            try {
+                reset()
+                setDataSource(url)
+                prepareAsync()
+            } catch (e: Exception) {
+                onError?.invoke(e)
             }
-
-            reset()
-            setDataSource(url)
-            prepareAsync()
         }
     }
 
@@ -80,38 +98,28 @@ class AudioPlayer(
                 // Start audio once loaded
                 start()
 
-                // Notify callback
-                onLoaded?.invoke(duration.toLong())
-
                 // Update flags
                 isLoaded = true
+
+                // Notify callback
+                onLoad?.invoke(duration.toLong())
             }
 
             setOnCompletionListener {
-                // Notify callback
-                onCompleted?.invoke()
-
                 // Update flags
                 isLoaded = false
+
+                // Notify callback
+                onComplete?.invoke()
 
                 // Release
                 this@AudioPlayer.release()
             }
-        }
-    }
 
-    private fun initProgressCallback() {
-        progressCallbackHandler = Handler()
-        progressCallback = Runnable {
-            val mediaPlayer = this.mediaPlayer
-            if (mediaPlayer != null) {
-                val progress = mediaPlayer.currentPosition.toLong()
-                if (progress != currentProgress) {
-                    onProgressChanged?.invoke(progress)
-                    currentProgress = progress
-                }
-
-                progressCallbackHandler?.postDelayed(progressCallback, TimeUnit.SECONDS.toMillis(1))
+            setOnErrorListener { _, what, extra ->
+                onError?.invoke(Exception("Failed to load audio with error code: $what, extra code: $extra"))
+                // Return false to trigger on complete
+                false
             }
         }
     }
@@ -129,5 +137,20 @@ class AudioPlayer(
         progressCallbackHandler?.removeCallbacks(progressCallback)
         progressCallbackHandler = null
         progressCallback = null
+    }
+
+    private fun initProgressCallback() {
+        progressCallbackHandler = Handler()
+        progressCallback = Runnable {
+            mediaPlayer?.let {
+                val progress = it.currentPosition.toLong()
+                if (progress != currentProgress) {
+                    onProgressChange?.invoke(progress)
+                    currentProgress = progress
+                }
+
+                progressCallbackHandler?.postDelayed(progressCallback, TimeUnit.SECONDS.toMillis(1))
+            }
+        }
     }
 }
