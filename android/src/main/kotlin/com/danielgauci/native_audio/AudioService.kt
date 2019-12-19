@@ -147,8 +147,6 @@ class AudioService : Service() {
     private val playbackStateBuilder by lazy {
         PlaybackStateCompat.Builder().setActions(
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_FAST_FORWARD or
                         PlaybackStateCompat.ACTION_REWIND or
                         PlaybackStateCompat.ACTION_STOP or
@@ -199,7 +197,7 @@ class AudioService : Service() {
 
         headsetManager.registerHeadsetPlugReceiver(
                 this,
-                onConnected = {},
+                onConnected = { },
                 onDisconnected = { pause() })
 
         bluetoothManager.registerBluetoothReceiver(

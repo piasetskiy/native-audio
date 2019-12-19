@@ -3,7 +3,6 @@ package com.danielgauci.native_audio
 import android.media.MediaPlayer
 import android.os.Handler
 import java.util.concurrent.TimeUnit
-import kotlin.Exception
 
 class AudioPlayer(
         private val onLoad: ((duration: Long) -> Unit)? = null,
@@ -28,37 +27,35 @@ class AudioPlayer(
     }
 
     fun resume() {
-        mediaPlayer?.apply {
-            if (isLoaded && !isPlaying) start()
+        try {
+            mediaPlayer?.apply { if (isLoaded && !isPlaying) start() }
+        } catch (e: Exception) {
+            onError?.invoke(e)
         }
+
         startListeningForProgress()
     }
 
     fun pause() {
-        mediaPlayer?.apply {
-            if (!isPlaying) return
-
-            try {
-                pause()
-            } catch (e: Exception) {
-                onError?.invoke(e)
-            }
+        try {
+            mediaPlayer?.apply { if (isPlaying) pause() }
+        } catch (e: Exception) {
+            onError?.invoke(e)
         }
+
         stopListeningForProgress()
     }
 
-    fun stop(release: Boolean = true) {
-        mediaPlayer?.apply {
-            if (!isPlaying) { return }
-            try {
-                stop()
-                reset()
-            } catch (e: Exception) {
-                onError?.invoke(e)
+    fun stop() {
+        try {
+            mediaPlayer?.let {
+                if (!it.isPlaying) return
+                it.stop()
+                it.reset()
             }
+        } catch (e: Exception) {
+            onError?.invoke(e)
         }
-
-        if (release) release()
     }
 
     /**
@@ -73,7 +70,7 @@ class AudioPlayer(
     }
 
     fun release() {
-        stop(release = false)
+        stop()
         stopListeningForProgress()
 
         mediaPlayer?.release()
@@ -81,14 +78,14 @@ class AudioPlayer(
     }
 
     private fun loadAudio(url: String) {
-        mediaPlayer?.apply {
-            try {
+        try {
+            mediaPlayer?.apply {
                 reset()
                 setDataSource(url)
                 prepareAsync()
-            } catch (e: Exception) {
-                onError?.invoke(e)
             }
+        } catch (e: Exception) {
+            onError?.invoke(e)
         }
     }
 
