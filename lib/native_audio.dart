@@ -130,9 +130,8 @@ class _NativeAudioImpl implements NativeAudio {
     _channel.setMethodCallHandler((methodCall) {
       switch (methodCall.method) {
         case _methodCallOnLoad:
-          int durationInMillis = methodCall.arguments;
-          if (didLoad != null)
-            didLoad(Duration(milliseconds: durationInMillis));
+          final int duration = methodCall.arguments ?? 0;
+          if (didLoad != null) didLoad(Duration(milliseconds: duration));
           break;
 
         case _methodCallOnResume:

@@ -6,7 +6,7 @@ import MediaPlayer
 public class AudioPlugin: NSObject, FlutterPlugin {
     
     enum SupportedInvokeMethodCall: String {
-        case onLoad = "onLoaded"
+        case onLoad = "onLoad"
         case onPause = "onPause"
         case onResume = "onResume"
         case onStop = "onStop"
