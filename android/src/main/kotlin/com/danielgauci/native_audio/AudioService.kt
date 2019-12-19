@@ -13,11 +13,7 @@ import android.media.AudioManager.*
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.support.v4.media.MediaMetadataCompat
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DURATION
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST
-import android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART
+import android.support.v4.media.MediaMetadataCompat.*
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.ColorInt
@@ -29,7 +25,6 @@ import androidx.palette.graphics.Palette
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
-import java.lang.Exception
 import java.util.concurrent.TimeUnit
 
 class AudioService : Service() {
@@ -73,7 +68,7 @@ class AudioService : Service() {
     private var resumeOnAudioFocus = false
     private var isNotificationShown = false
     private var notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-    private var metadata = MediaMetadataCompat.Builder()
+    private var metadata = Builder()
 
     private val binder by lazy { AudioServiceBinder() }
     private val session by lazy {
@@ -195,15 +190,9 @@ class AudioService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MediaButtonReceiver.handleIntent(session, intent)
 
-        headsetManager.registerHeadsetPlugReceiver(
-                this,
-                onConnected = { },
-                onDisconnected = { pause() })
+        headsetManager.registerHeadsetPlugReceiver(this, onConnected = { }, onDisconnected = { pause() })
 
-        bluetoothManager.registerBluetoothReceiver(
-                this,
-                onConnected = {},
-                onDisconnected = { pause() })
+        bluetoothManager.registerBluetoothReceiver(this, onConnected = {}, onDisconnected = { pause() })
 
         return START_NOT_STICKY
     }
@@ -334,21 +323,20 @@ class AudioService : Service() {
 
         notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setSmallIcon(R.drawable.play)
                 .setContentIntent(contentIntent)
+                .setSmallIcon(R.drawable.play)
                 .setDeleteIntent(stopIntent)
-                .setContentTitle(title)
                 .setOnlyAlertOnce(true)
                 .setStyle(mediaStyle)
                 .setOngoing(true)
 
         artist?.let { notificationBuilder.setSubText(it) }
         album?.let { notificationBuilder.setContentText(it) }
+        title?.let { notificationBuilder.setContentTitle(it) }
 
         notificationBuilder.apply {
-            if (image != null) setLargeIcon(image)
-            if (notificationColor != null) color = notificationColor
-
+            image?.let { setLargeIcon(it) }
+            notificationColor?.let { color = it }
             // Add play/pause action
             setNotificationButtons(this)
         }
@@ -395,50 +383,39 @@ class AudioService : Service() {
             return
         }
 
-            // Get image show notification
+        // Get image show notification
         Glide.with(this)
-                    .asBitmap()
-                    .load(imageUrl)
-                    .into(object : SimpleTarget<Bitmap>() {
-                        override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                            Palette.from(resource).generate { palette ->
-                                palette?.let {
-                                    // Palette generated, show notification with bitmap and palette
-                                    val color = it.getVibrantColor(Color.WHITE)
-                                    updateNotificationBuilder(
-                                            title = title,
-                                            artist = artist,
-                                            album = album,
-                                            notificationColor = color,
-                                            image = resource
-                                    )
+                .asBitmap()
+                .load(imageUrl)
+                .into(object : SimpleTarget<Bitmap>() {
+                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                        Palette.from(resource).generate { palette ->
+                            palette?.let {
+                                // Palette generated, show notification with bitmap and palette
+                                val color = it.getVibrantColor(Color.WHITE)
+                                updateNotificationBuilder(title = title, artist = artist, album = album, notificationColor = color, image = resource)
 
-                                    startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                                    isNotificationShown = true
-                                } ?: run {
-                                    // Failed to generate palette, show notification with bitmap
-                                    updateNotificationBuilder(
-                                            title = title,
-                                            artist = artist,
-                                            album = album,
-                                            image = resource
-                                    )
+                                startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                                isNotificationShown = true
+                            } ?: run {
+                                // Failed to generate palette, show notification with bitmap
+                                updateNotificationBuilder(title = title, artist = artist, album = album, image = resource)
 
-                                    startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                                    isNotificationShown = true
-                                }
+                                startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                                isNotificationShown = true
                             }
                         }
+                    }
 
-                        override fun onLoadFailed(errorDrawable: Drawable?) {
-                            super.onLoadFailed(errorDrawable)
+                    override fun onLoadFailed(errorDrawable: Drawable?) {
+                        super.onLoadFailed(errorDrawable)
 
-                            // Failed to load image, show notification
-                            updateNotificationBuilder(title, artist, album)
-                            startForeground(NOTIFICATION_ID, notificationBuilder.build())
-                            isNotificationShown = true
-                        }
-                    })
+                        // Failed to load image, show notification
+                        updateNotificationBuilder(title, artist, album)
+                        startForeground(NOTIFICATION_ID, notificationBuilder.build())
+                        isNotificationShown = true
+                    }
+                })
 
     }
 

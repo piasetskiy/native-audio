@@ -139,62 +139,33 @@ class AudioPlugin(private val context: Context, private val channel: MethodChann
     private fun bindAudioServiceWithChannel(service: AudioService) {
         service.apply {
             // Notify flutter with audio updates
-            onLoad = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_LOAD, it)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
 
-            onProgressChange = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_PROGRESS_CHANGE, it)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onLoad = { invokeMethod(METHOD_CALL_ON_LOAD, it) }
 
-            onResume = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_RESUME, null)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onProgressChange = { invokeMethod(METHOD_CALL_ON_PROGRESS_CHANGE, it) }
 
-            onPause = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_PAUSE, null)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onResume = { invokeMethod(METHOD_CALL_ON_RESUME) }
 
-            onStop = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_STOP, null)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onPause = { invokeMethod(METHOD_CALL_ON_PAUSE) }
 
-            onComplete = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_COMPLETE, null)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onStop = { invokeMethod(METHOD_CALL_ON_STOP) }
 
-            onError = {
-                try {
-                    channel.invokeMethod(METHOD_CALL_ON_ERROR, it)
-                } catch (e: Exception) {
-                    Log.e(this::class.java.simpleName, e.message, e)
-                }
-            }
+            onComplete = { invokeMethod(METHOD_CALL_ON_COMPLETE) }
+
+            onError = { handleError(it) }
         }
+    }
+
+    private fun invokeMethod(method: String, args: Any? = null) = try {
+        channel.invokeMethod(method, args)
+    } catch (e: Exception) {
+        handleError(e)
+    }
+
+    private fun handleError(error: Exception) = try {
+        channel.invokeMethod(METHOD_CALL_ON_ERROR, error.toString())
+    } catch (e: Exception) {
+        Log.e(this::class.java.simpleName, e.message, e)
     }
 
     private fun releaseAudioService() {
