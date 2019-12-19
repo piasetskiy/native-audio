@@ -3,6 +3,6 @@
 
 @implementation NativeAudioPlugin
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
-  [SwiftNativeAudioPlugin registerWithRegistrar:registrar];
+  [AudioPlugin registerWithRegistrar:registrar];
 }
 @end
