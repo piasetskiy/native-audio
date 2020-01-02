@@ -14,7 +14,7 @@ import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import io.flutter.view.FlutterNativeView
 
-class NativeAudioPluginx(private val context: Context, private val channel: MethodChannel) : MethodCallHandler {
+class NativeAudioPlugin(private val context: Context, private val channel: MethodChannel) : MethodCallHandler {
 
     companion object {
         private const val CHANNEL = "com.danielgauci.native_audio"
