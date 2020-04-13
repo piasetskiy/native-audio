@@ -199,6 +199,7 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
         player.replaceCurrentItem(with: nil)
         playingInfoCenter.nowPlayingInfo = nil
 
+        // Set audio session as inactive
         do {
             try audioSession.setActive(false)
         } catch let e {
@@ -217,21 +218,35 @@ class AudioPlayerImpl: NSObject, AudioPlayer {
             name: .AVPlayerItemDidPlayToEndTime,
             object: playerItem
         )
+        self.playerItem.removeObserver(self, forKeyPath: #keyPath(AVPlayerItem.status), context: &playerItemContext)
         self.playerItem = nil
         self.player = nil
         delegate?.audioPlayerDidStop()
     }
 
     func seekTo(time: Int) {
-        let seekTo = CMTimeMakeWithSeconds(Float64(time / 1000), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        player.seek(to: seekTo)
-        guard player.currentItem != nil else {
-            return
+        // Playback is not automatically paused when seeking, handle this manually
+        let isPlaying = player.rate > 0.0
+        
+        if (isPlaying) {
+            pause()
         }
-
-        playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Float64(time / 1000)
+        
+        let seekTo = CMTimeMakeWithSeconds(Float64(time / 1000), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        player.seek(to: seekTo, completionHandler: { [weak self] success in
+            // Resume playback if player was previously playing
+            if (isPlaying) {
+                self?.resume()
+            }
+            
+            guard self?.player.currentItem != nil else {
+                return
+            }
+            
+            self?.playingInfoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Float64(time / 1000)
+        })
     }
-
+    
 }
 
 @available(iOS 10.0, *)
